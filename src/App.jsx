@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react'
 
+function openDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open("PlayVideoDB",6)
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains("videos")) r.result.createObjectStore("videos",{keyPath:"id"}) }
+    r.onsuccess=()=>res(r.result)
+  })
+}
+async function saveDB(v){ const db=await openDB(); db.transaction("videos","readwrite").objectStore("videos").put(v) }
+async function getAllDB(){ const db=await openDB(); return new Promise(res=>{ const q=db.transaction("videos","readonly").objectStore("videos").getAll(); q.onsuccess=()=>res(q.result) }) }
+async function delDB(id){ const db=await openDB(); db.transaction("videos","readwrite").objectStore("videos").delete(id) }
+
 export default function App(){
   const [videos,setVideos]=useState([])
   const [sel,setSel]=useState(null)
@@ -7,51 +18,57 @@ export default function App(){
   const [file,setFile]=useState(null)
   const [show,setShow]=useState(false)
   const [cmt,setCmt]=useState("")
-  const [likes,setLikes]=useState({})
 
-  useEffect(()=>{
-    const s=localStorage.getItem("playvideo_v2")
-    if(s){ try{ const p=JSON.parse(s); setVideos(p.map(v=>({...v, url:v.url})))}catch{} }
-  },[])
+  useEffect(()=>{ (async()=>{
+    const all=await getAllDB()
+    const withUrl=all.map(v=>({...v, url: URL.createObjectURL(v.blob)}))
+    setVideos(withUrl.reverse())
+  })() },[])
 
   async function upload(){
-    if(!title||!file) return alert("Title + Video din Boss!")
-    const url=URL.createObjectURL(file)
-    const v={id:Date.now(), title, url, views:608, channel:"My Channel", comments:[]}
-    const nv=[v,...videos]
-    setVideos(nv);
-    try{
-      const toSave=nv.slice(0,3).map(x=>({id:x.id,title:x.title,views:x.views,channel:x.channel,comments:x.comments,url:x.url}))
-      localStorage.setItem("playvideo_v2", JSON.stringify(toSave))
-    }catch{}
-    setTitle(""); setFile(null); setShow(false)
+    if(!title||!file) return alert("Title + video din Boss!")
+    const isShort = file.size < 10*1024*1024 && confirm("Short banaben? OK=Short, Cancel=Long")
+    const v={id:Date.now(), title, channel:"My Channel", blob:file, views:Math.floor(Math.random()*5000)+10, likes:0, comments:[], dur:`${Math.floor(Math.random()*15)+1}:${String(Math.floor(Math.random()*60)).padStart(2,'0')}`, isShort}
+    await saveDB(v)
+    setVideos([{...v, url:URL.createObjectURL(file)},...videos])
+    setTitle(""); setFile(null); setShow(false); alert("Upload Done! 🚀")
   }
 
   if(sel){
     return (
-      <div style={{background:'#0f0f0f',color:'white',minHeight:'100vh'}}>
-        <div style={{padding:10,display:'flex',gap:10,alignItems:'center',background:'#000',position:'sticky',top:0,zIndex:10}}>
-          <button onClick={()=>setSel(null)} style={{background:'#222',border:0,color:'white',padding:'8px 12px',borderRadius:20}}>← Back</button>
+      <div style={{background:'#0f0f0f',color:'white',minHeight:'100vh',fontFamily:'system-ui'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,padding:10,background:'#0f0f0f',position:'sticky',top:0,zIndex:10}}>
+          <button onClick={()=>setSel(null)} style={{background:'#272727',border:0,color:'white',padding:'8px 12px',borderRadius:20}}>← Back</button>
           <b>▶️ PlayVideo</b>
         </div>
-        <video src={sel.url} controls autoPlay playsInline style={{width:'100%',background:'black'}} />
+        <video src={sel.url} controls autoPlay playsInline style={{width:'100%',background:'black',maxHeight:'55vh'}} />
         <div style={{padding:12}}>
-          <h3 style={{margin:'5px 0'}}>{sel.title}</h3>
-          <div style={{color:'#aaa',fontSize:12}}>{sel.views} views • My Channel ✔️</div>
-          <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
-            <button onClick={()=>{ const k=sel.id; const l=(likes[k]||0)+1; setLikes({...likes,[k]:l}) }} style={{background:'#272727',border:0,color:'white',padding:'8px 14px',borderRadius:20}}>👍 {(likes[sel.id]||0)+1} Like</button>
-            <button style={{background:'#272727',border:0,color:'white',padding:'8px 14px',borderRadius:20}}>👎 Dislike</button>
-            <button onClick={()=>{navigator.clipboard.writeText(sel.title); alert("Copied 🔗")}} style={{background:'#272727',border:0,color:'white',padding:'8px 14px',borderRadius:20}}>↗️ Share</button>
-            <button style={{background:'#272727',border:0,color:'white',padding:'8px 14px',borderRadius:20}}>🔔 Subscribe</button>
+          <h3 style={{margin:'8px 0'}}>{sel.title}</h3>
+          <p style={{color:'#aaa',fontSize:13}}>{sel.views} views • {sel.isShort?"Short":"Long Video"}</p>
+
+          <div style={{display:'flex',alignItems:'center',gap:10,marginTop:12}}>
+            <div style={{width:36,height:36,background:'red',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'bold'}}>M</div>
+            <div style={{flex:1}}><b style={{fontSize:14}}>My Channel ✔️</b><br/><span style={{fontSize:11,color:'#aaa'}}>15K subscribers</span></div>
+            <button style={{background:'white',color:'black',border:0,padding:'8px 14px',borderRadius:20,fontWeight:'bold',fontSize:12}}>Subscribe</button>
+            <span style={{fontSize:20}}>🔔</span>
           </div>
-          <div style={{marginTop:14,background:'#1e1e1e',padding:10,borderRadius:8,textAlign:'center',fontSize:12,border:'1px dashed #555'}}>💰 AD SPACE - Ekhane apnar Ad bosbe</div>
-          <div style={{marginTop:14}}>
+
+          <div style={{display:'flex',gap:8,marginTop:14,overflowX:'auto'}}>
+            <button onClick={()=>{ const up={...sel, likes:sel.likes+1}; setSel(up); setVideos(vs=>vs.map(x=>x.id===sel.id?up:x)) }} style={{background:'#272727',color:'white',border:0,padding:'8px 16px',borderRadius:20,fontWeight:'bold'}}>👍 {sel.likes} Like</button>
+            <button style={{background:'#272727',color:'white',border:0,padding:'8px 16px',borderRadius:20}}>👎 Dislike</button>
+            <button onClick={()=>{navigator.clipboard.writeText(window.location.href); alert("Link Copied 🔗")}} style={{background:'#272727',color:'white',border:0,padding:'8px 16px',borderRadius:20}}>↗️ Share</button>
+            <button onClick={async()=>{ await delDB(sel.id); setVideos(vs=>vs.filter(x=>x.id!==sel.id)); setSel(null) }} style={{background:'#272727',color:'#ff6b6b',border:0,padding:'8px 16px',borderRadius:20}}>🗑️ Delete</button>
+          </div>
+
+          <div style={{background:'#1e1e1e',padding:12,borderRadius:10,marginTop:14,textAlign:'center',border:'1px dashed #555',fontSize:12}}>💰 AD SPACE - Ekhane Ad bosbe</div>
+
+          <div style={{marginTop:16}}>
             <b>Comments</b>
-            <div style={{display:'flex',gap:6,marginTop:8}}>
-              <input value={cmt} onChange={e=>setCmt(e.target.value)} placeholder="Comment likhun..." style={{flex:1,padding:10,borderRadius:20,border:0,background:'#222',color:'white'}}/>
-              <button onClick={()=>{ if(!cmt) return; const up={...sel, comments:[...sel.comments,cmt]}; setSel(up); setVideos(vs=>vs.map(x=>x.id===sel.id?up:x)); setCmt("") }} style={{background:'#3ea6ff',border:0,padding:'8px 12px',borderRadius:20}}>Post</button>
+            <div style={{display:'flex',gap:8,marginTop:10}}>
+              <input value={cmt} onChange={e=>setCmt(e.target.value)} placeholder="Comment..." style={{flex:1,padding:10,borderRadius:20,border:'1px solid #333',background:'#111',color:'white'}}/>
+              <button onClick={()=>{ if(!cmt) return; const up={...sel, comments:[...sel.comments,{id:Date.now(),text:cmt}]}; setSel(up); setVideos(vs=>vs.map(x=>x.id===sel.id?up:x)); setCmt("") }} style={{background:'#3ea6ff',border:0,padding:'8px 14px',borderRadius:20,fontWeight:'bold'}}>Post</button>
             </div>
-            {sel.comments.map((c,i)=><div key={i} style={{marginTop:8,background:'#181818',padding:8,borderRadius:8}}>😎 {c}</div>)}
+            {sel.comments.map(c=><div key={c.id} style={{marginTop:10,background:'#181818',padding:8,borderRadius:8,fontSize:14}}>😎 {c.text}</div>)}
           </div>
         </div>
       </div>
@@ -59,34 +76,57 @@ export default function App(){
   }
 
   return (
-    <div style={{background:'#0f0f0f',color:'white',minHeight:'100vh',paddingBottom:80}}>
-      <div style={{background:'#0f0f0f',padding:'10px 12px',display:'flex',alignItems:'center',gap:10,borderBottom:'1px solid #222',position:'sticky',top:0,zIndex:10}}>
-        <b style={{fontSize:18}}>▶️ Play<span style={{color:'red'}}>Video</span></b>
+    <div style={{background:'#0f0f0f',color:'white',minHeight:'100vh',paddingBottom:80,fontFamily:'system-ui'}}>
+      <header style={{padding:'10px 12px',display:'flex',alignItems:'center',gap:10,position:'sticky',top:0,background:'#0f0f0f',zIndex:10,borderBottom:'1px solid #222'}}>
+        <span style={{fontSize:22}}>☰</span>
+        <b style={{fontSize:19}}>▶️ <span style={{color:'red'}}>Play</span>Video</b>
         <div style={{flex:1}}></div>
-        <button onClick={()=>setShow(!show)} style={{background:'red',border:0,color:'white',padding:'6px 12px',borderRadius:20,fontWeight:'bold'}}>+ Upload</button>
-      </div>
+        <button onClick={()=>setShow(!show)} style={{background:'red',border:0,color:'white',padding:'6px 12px',borderRadius:20,fontWeight:'bold'}}>+</button>
+      </header>
 
-      {show && <div style={{margin:10,background:'#222',padding:12,borderRadius:12}}>
-        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Video title - ex: Amer dokana" style={{width:'100%',padding:10,borderRadius:8,border:0,background:'#111',color:'white',marginBottom:8,boxSizing:'border-box'}}/>
+      {show && <div style={{margin:10,background:'#212121',padding:12,borderRadius:12}}>
+        <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Video title..." style={{width:'100%',padding:10,borderRadius:8,border:0,background:'#111',color:'white',marginBottom:8,boxSizing:'border-box'}}/>
         <input type="file" accept="video/*" onChange={e=>setFile(e.target.files[0])} style={{width:'100%',marginBottom:8}}/>
-        <button onClick={upload} style={{width:'100%',padding:10,background:'red',border:0,borderRadius:8,color:'white',fontWeight:'bold'}}>PUBLISH NOW</button>
+        <button onClick={upload} style={{width:'100%',padding:10,background:'red',border:0,borderRadius:8,color:'white',fontWeight:'bold'}}>PUBLISH</button>
       </div>}
 
       <div style={{padding:10}}>
-        {videos.length===0 && <div style={{textAlign:'center',marginTop:60,color:'#777'}}>Kono video nei<br/>Upload korun Boss! 👆<br/><button onClick={()=>setShow(true)} style={{marginTop:10,background:'red',border:0,color:'white',padding:'8px 16px',borderRadius:20}}>+ First Video Upload</button></div>}
-        {videos.map(v=>(
-          <div key={v.id} onClick={()=>setSel(v)} style={{marginBottom:14,background:'#181818',borderRadius:12,overflow:'hidden',border:'1px solid #222'}}>
-            <video src={v.url} muted style={{width:'100%',aspectRatio:'16/9',background:'black',objectFit:'cover'}} />
-            <div style={{padding:10,display:'flex',gap:8,alignItems:'center'}}>
-              <div style={{flex:1}}><b style={{fontSize:14}}>{v.title}</b><br/><span style={{fontSize:11,color:'#aaa'}}>{v.views} views • My Channel ✔️ • Tools sob vitore 👆 click korun</span></div>
-              <div style={{background:'red',padding:'6px 10px',borderRadius:20,fontSize:12}}>▶️ Play</div>
+        {videos.length===0 && <div style={{textAlign:'center',marginTop:80,color:'#777'}}>Kono video nei<br/>Upload korun Boss! 👆</div>}
+
+        {/* LONG */}
+        <div style={{fontWeight:'bold',margin:'10px 0'}}>📺 Long Videos</div>
+        {videos.filter(v=>!v.isShort).map(v=>(
+          <div key={v.id} onClick={()=>setSel(v)} style={{marginBottom:16,background:'#181818',borderRadius:12,overflow:'hidden'}}>
+            <div style={{position:'relative'}}>
+              <video src={v.url} muted style={{width:'100%',aspectRatio:'16/9',objectFit:'cover',background:'#000'}} />
+              <div style={{position:'absolute',bottom:8,right:8,background:'black',padding:'2px 6px',borderRadius:4,fontSize:11}}>{v.dur}</div>
+              <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',width:48,height:48,background:'rgba(0,0,0,0.6)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22}}>▶️</div>
             </div>
+            <div style={{padding:10}}><b style={{fontSize:14}}>{v.title}</b><br/><span style={{fontSize:12,color:'#aaa'}}>{v.views} views • My Channel ✔️</span></div>
           </div>
         ))}
+
+        {/* SHORTS */}
+        {videos.filter(v=>v.isShort).length>0 && <>
+          <div style={{fontWeight:'bold',margin:'16px 0 10px'}}>🔥 Shorts</div>
+          <div style={{display:'flex',gap:10,overflowX:'auto'}}>
+            {videos.filter(v=>v.isShort).map(v=>(
+              <div key={v.id} onClick={()=>setSel(v)} style={{minWidth:130}}>
+                <video src={v.url} muted style={{width:130,height:220,objectFit:'cover',borderRadius:12,background:'#000'}}/>
+                <div style={{fontSize:12,marginTop:4}}>{v.title.slice(0,25)}</div>
+                <div style={{fontSize:11,color:'#aaa'}}>{v.views} views</div>
+              </div>
+            ))}
+          </div>
+        </>}
       </div>
 
-      <div style={{position:'fixed',bottom:0,left:0,right:0,background:'#0f0f0f',display:'flex',justifyContent:'space-around',padding:'10px 0',borderTop:'1px solid #222'}}>
-        <span style={{color:'red'}}>🏠 Home</span><span style={{color:'#666'}}>🎬 Shorts</span><span onClick={()=>setShow(!show)} style={{background:'white',color:'black',padding:'2px 14px',borderRadius:12}}>+</span><span style={{color:'#666'}}>📺 Subs</span><span style={{color:'#666'}}>▶️ You</span>
+      <div style={{position:'fixed',bottom:0,left:0,right:0,background:'#0f0f0f',display:'flex',justifyContent:'space-around',padding:'8px 0',borderTop:'1px solid #222'}}>
+        <div style={{textAlign:'center'}}><div>🏠</div><div style={{fontSize:10,color:'red'}}>Home</div></div>
+        <div style={{textAlign:'center',color:'#aaa'}}><div>🎬</div><div style={{fontSize:10}}>Shorts</div></div>
+        <div onClick={()=>setShow(!show)} style={{width:36,height:28,background:'white',color:'black',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'bold'}}>+</div>
+        <div style={{textAlign:'center',color:'#aaa'}}><div>📺</div><div style={{fontSize:10}}>Subs</div></div>
+        <div style={{textAlign:'center',color:'#aaa'}}><div>▶️</div><div style={{fontSize:10}}>You</div></div>
       </div>
     </div>
   )
