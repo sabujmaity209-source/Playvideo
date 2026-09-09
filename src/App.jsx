@@ -397,14 +397,19 @@ button:hover {
 
 .shortCard {
   position: relative;
+  width: min(100%, 430px);
+  height: calc(100vh - 130px);
+  min-height: 620px;
+  margin: 0 auto 16px;
   background: #000;
   border-radius: 14px;
   overflow: hidden;
+  scroll-snap-align: start;
 }
 
 .shortVideo {
   width: 100%;
-  height: min(70vh, 620px);
+  height: 100%;
   object-fit: cover;
   display: block;
   background: #000;
@@ -412,9 +417,10 @@ button:hover {
 
 .shortInfo {
   position: absolute;
-  left: 15px;
-  right: 15px;
+  left: 12px;
+  right: 12px;
   bottom: 15px;
+  z-index: 5;
   background: #0009;
   padding: 12px;
   border-radius: 12px;
