@@ -439,25 +439,29 @@ select.input {
 @media(max-width:800px) {
 
   .shortCard {
-  width: 100%;
-  height: calc(100vh - 125px);
-  min-height: 0;
-  margin: 0 auto 10px;
-  border-radius: 12px;
-}
+    width: 100%;
+    height: calc(100vh - 125px);
+    min-height: 0;
+    margin: 0 auto 10px;
+    border-radius: 12px;
+  }
 
-.shortVideo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+  .shortVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 
-.shortInfo {
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
-  padding: 10px;
-}.side {
+  .shortInfo {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    padding: 10px;
+  }
+
+  .side {
+    display: none;
+  }
     display: none;
   }
 
